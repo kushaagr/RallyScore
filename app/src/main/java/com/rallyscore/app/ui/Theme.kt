@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.Color
 import com.rallyscore.app.settings.ThemeMode
 
 data class Palette(
+    val isDark: Boolean,
     val background: Color,
     val panel: Color,
     val panelBorder: Color,
@@ -23,6 +24,7 @@ data class Palette(
 
 // Pure black so AMOLED pixels are fully off; digits are a soft off-white to reduce wear.
 val DarkPalette = Palette(
+    isDark = true,
     background = Color.Black,
     panel = Color.Black,
     panelBorder = Color(0xFF1A1C20),
@@ -34,6 +36,7 @@ val DarkPalette = Palette(
 )
 
 val LightPalette = Palette(
+    isDark = false,
     background = Color(0xFFF2F3F5),
     panel = Color.White,
     panelBorder = Color(0xFFDADDE2),

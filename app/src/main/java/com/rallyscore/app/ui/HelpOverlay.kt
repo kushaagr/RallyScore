@@ -24,6 +24,8 @@ private val HelpItems = listOf(
     "Undo / Redo" to "Undo reverses anything, including a reset.",
     "Swap sides" to "Switches which player is on which side, e.g. when changing ends. " +
         "Buttons stay tied to the side, not the player.",
+    "Orientation" to "The rotate button cycles between turning with the phone, portrait and landscape. " +
+        "In Settings you can choose whether only the scores turn or the whole screen.",
     "Scoring" to "First to 21 with a 2-point lead; 30 wins outright. Both limits are adjustable in Settings.",
     "Announcements" to "The score is spoken after every change. Use the speaker button to set the volume.",
     "Screen" to "The screen stays on. To protect AMOLED screens the layout shifts slightly every minute, " +
@@ -31,8 +33,8 @@ private val HelpItems = listOf(
 )
 
 @Composable
-fun HelpOverlay(onDismiss: () -> Unit) {
-    Overlay(onDismiss = onDismiss) {
+fun HelpOverlay(onDismiss: () -> Unit, angle: Float = 0f, swapAxes: Boolean = false) {
+    Overlay(onDismiss = onDismiss, angle = angle, swapAxes = swapAxes) {
         Text("How to use", style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(12.dp))
         Column(

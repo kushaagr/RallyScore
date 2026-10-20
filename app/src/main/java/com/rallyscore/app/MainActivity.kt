@@ -5,6 +5,7 @@ import android.media.AudioManager
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.KeyEvent
+import android.view.OrientationEventListener
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -25,9 +26,12 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.min
 
 class MainActivity : ComponentActivity() {
 
@@ -38,6 +42,12 @@ class MainActivity : ComponentActivity() {
     private val interaction = MutableStateFlow(SystemClock.uptimeMillis())
     private val interactionFlow = interaction.asStateFlow()
     private var dimJob: Job? = null
+
+    // Physical orientation the scoreboard contents face when "rotate content" is on.
+    private val contentOrientation = MutableStateFlow(0)
+    private val contentOrientationFlow = contentOrientation.asStateFlow()
+    private var sensorOrientation = 0
+    private lateinit var orientationListener: OrientationEventListener
     private var dimmed = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -49,6 +59,19 @@ class MainActivity : ComponentActivity() {
         volumeControlStream = AudioManager.STREAM_MUSIC
         hideSystemBars()
 
+        orientationListener = object : OrientationEventListener(this) {
+            override fun onOrientationChanged(degrees: Int) {
+                if (degrees == ORIENTATION_UNKNOWN) return
+                val nearest = ((degrees + 45) / 90 % 4) * 90
+                val distance = abs(degrees - nearest).let { min(it, 360 - it) }
+                if (distance > 30) return // hysteresis: ignore angles between two orientations
+                if (nearest != sensorOrientation) {
+                    sensorOrientation = nearest
+                    updateContentOrientation()
+                }
+            }
+        }
+
         announcer = Announcer(this)
         haptics = Haptics(this)
 
@@ -57,7 +80,12 @@ class MainActivity : ComponentActivity() {
                 launch { vm.announcements.collect { announcer.speak(it) } }
                 launch { vm.haptics.collect { if (vm.settings.value.vibrate) haptics.play(it) } }
                 launch {
-                    vm.settings.map { it.orientation }.distinctUntilChanged().collect { applyOrientation(it) }
+                    combine(vm.settings, vm.screen) { s, screen ->
+                        Triple(s.orientation, s.rotateContent, screen == Screen.SCOREBOARD)
+                    }.distinctUntilChanged().collect { (mode, rotateContent, onScoreboard) ->
+                        applyOrientation(mode, rotateContent && onScoreboard)
+                        updateContentOrientation()
+                    }
                 }
                 launch {
                     vm.settings.map { it.dimWhenIdle to it.dimAfterMin }.distinctUntilChanged().collect { markActive() }
@@ -66,7 +94,12 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            RallyScoreApp(vm = vm, interaction = interactionFlow, onVolume = ::showVolumePanel)
+            RallyScoreApp(
+                vm = vm,
+                interaction = interactionFlow,
+                contentOrientation = contentOrientationFlow,
+                onVolume = ::showVolumePanel,
+            )
         }
     }
 
@@ -111,12 +144,14 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         hideSystemBars()
         markActive()
+        if (orientationListener.canDetectOrientation()) orientationListener.enable()
     }
 
     override fun onPause() {
         super.onPause()
         vm.input.cancelAll()
         dimJob?.cancel()
+        orientationListener.disable()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -150,12 +185,37 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun applyOrientation(mode: OrientationMode) {
-        requestedOrientation = when (mode) {
-            OrientationMode.AUTO -> ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
-            OrientationMode.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-            OrientationMode.LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            OrientationMode.LOCKED -> ActivityInfo.SCREEN_ORIENTATION_LOCKED
+    private fun applyOrientation(mode: OrientationMode, contentRotates: Boolean) {
+        requestedOrientation = if (contentRotates) {
+            // The window stays put; the scoreboard turns its contents instead.
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        } else {
+            when (mode) {
+                OrientationMode.AUTO -> ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+                OrientationMode.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                OrientationMode.LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                OrientationMode.LOCKED -> ActivityInfo.SCREEN_ORIENTATION_LOCKED
+            }
+        }
+    }
+
+    /** Applies the orientation setting to the latest sensor reading (content-rotation mode). */
+    private fun updateContentOrientation() {
+        val current = contentOrientation.value
+        val sensor = sensorOrientation
+        contentOrientation.value = when (vm.settings.value.orientation) {
+            OrientationMode.AUTO -> sensor
+            OrientationMode.PORTRAIT -> when {
+                sensor % 180 == 0 -> sensor
+                current % 180 == 0 -> current
+                else -> 0
+            }
+            OrientationMode.LANDSCAPE -> when {
+                sensor % 180 != 0 -> sensor
+                current % 180 != 0 -> current
+                else -> 270
+            }
+            OrientationMode.LOCKED -> current
         }
     }
 

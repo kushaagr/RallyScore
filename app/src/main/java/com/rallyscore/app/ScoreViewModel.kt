@@ -12,6 +12,7 @@ import com.rallyscore.app.model.Rules
 import com.rallyscore.app.model.Score
 import com.rallyscore.app.model.Side
 import com.rallyscore.app.settings.AppSettings
+import com.rallyscore.app.settings.OrientationMode
 import com.rallyscore.app.settings.SettingsRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -132,6 +133,20 @@ class ScoreViewModel(app: Application) : AndroidViewModel(app), RemoteInputContr
     fun swapSides() {
         input.cancelAll()
         settingsRepo.update { it.copy(swapped = !it.swapped) }
+        emitHaptic(Haptic.TICK)
+    }
+
+    /** Toolbar button: Rotate with phone -> Portrait -> Landscape -> Rotate with phone. */
+    fun cycleOrientation() {
+        settingsRepo.update {
+            it.copy(
+                orientation = when (it.orientation) {
+                    OrientationMode.AUTO -> OrientationMode.PORTRAIT
+                    OrientationMode.PORTRAIT -> OrientationMode.LANDSCAPE
+                    OrientationMode.LANDSCAPE, OrientationMode.LOCKED -> OrientationMode.AUTO
+                },
+            )
+        }
         emitHaptic(Haptic.TICK)
     }
 

@@ -10,6 +10,21 @@ import kotlinx.coroutines.flow.asStateFlow
 enum class ThemeMode { SYSTEM, DARK, LIGHT }
 enum class OrientationMode { AUTO, PORTRAIT, LANDSCAPE, LOCKED }
 
+/**
+ * Player tile background. [dark] is used in dark mode (kept very dark for AMOLED),
+ * [light] in light mode (muted), [swatch] is a brighter tone for the picker ring.
+ */
+enum class TileColor(val label: String, val dark: Long, val light: Long, val swatch: Long) {
+    NONE("None", 0xFF000000, 0xFFFFFFFF, 0xFF8A8F98),
+    GRAY("Gray", 0xFF16171A, 0xFFE4E6EA, 0xFF9AA0A8),
+    BLUE("Blue", 0xFF0E1A30, 0xFFD9E4F5, 0xFF5B8DEF),
+    TEAL("Teal", 0xFF082322, 0xFFD3ECEA, 0xFF3FB8AF),
+    GREEN("Green", 0xFF0D2312, 0xFFDAEED6, 0xFF57B96A),
+    AMBER("Amber", 0xFF281B06, 0xFFF3E6CC, 0xFFE0A640),
+    RED("Red", 0xFF2A0D0F, 0xFFF3DADB, 0xFFE06A6F),
+    PURPLE("Purple", 0xFF1C1030, 0xFFE6DCF4, 0xFF9C7BE0),
+}
+
 data class AppSettings(
     val target: Int = 21,
     val max: Int = 30,
@@ -19,6 +34,10 @@ data class AppSettings(
     val showServe: Boolean = true,
     val theme: ThemeMode = ThemeMode.DARK,
     val orientation: OrientationMode = OrientationMode.AUTO,
+    /** true: window stays put and only the scoreboard contents turn; false: the whole screen rotates. */
+    val rotateContent: Boolean = true,
+    val tile1: TileColor = TileColor.BLUE,
+    val tile2: TileColor = TileColor.AMBER,
     val announce: Boolean = true,
     val vibrate: Boolean = true,
     val volumeKeys: Boolean = true,
@@ -44,6 +63,8 @@ data class AppSettings(
     )
 
     fun name(player: Int): String = if (player == 0) player1 else player2
+
+    fun tile(player: Int): TileColor = if (player == 0) tile1 else tile2
 }
 
 class SettingsRepository(context: Context) {
@@ -70,6 +91,9 @@ class SettingsRepository(context: Context) {
             showServe = prefs.getBoolean("showServe", d.showServe),
             theme = enumOr(prefs.getString("theme", null), d.theme),
             orientation = enumOr(prefs.getString("orientation", null), d.orientation),
+            rotateContent = prefs.getBoolean("rotateContent", d.rotateContent),
+            tile1 = enumOr(prefs.getString("tile1", null), d.tile1),
+            tile2 = enumOr(prefs.getString("tile2", null), d.tile2),
             announce = prefs.getBoolean("announce", d.announce),
             vibrate = prefs.getBoolean("vibrate", d.vibrate),
             volumeKeys = prefs.getBoolean("volumeKeys", d.volumeKeys),
@@ -98,6 +122,9 @@ class SettingsRepository(context: Context) {
             .putBoolean("showServe", s.showServe)
             .putString("theme", s.theme.name)
             .putString("orientation", s.orientation.name)
+            .putBoolean("rotateContent", s.rotateContent)
+            .putString("tile1", s.tile1.name)
+            .putString("tile2", s.tile2.name)
             .putBoolean("announce", s.announce)
             .putBoolean("vibrate", s.vibrate)
             .putBoolean("volumeKeys", s.volumeKeys)

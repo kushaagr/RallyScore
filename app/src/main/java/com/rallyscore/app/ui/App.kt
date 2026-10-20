@@ -8,14 +8,20 @@ import com.rallyscore.app.ScoreViewModel
 import kotlinx.coroutines.flow.StateFlow
 
 @Composable
-fun RallyScoreApp(vm: ScoreViewModel, interaction: StateFlow<Long>, onVolume: () -> Unit) {
+fun RallyScoreApp(
+    vm: ScoreViewModel,
+    interaction: StateFlow<Long>,
+    contentOrientation: StateFlow<Int>,
+    onVolume: () -> Unit,
+) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val screen by vm.screen.collectAsStateWithLifecycle()
     val lastInteraction by interaction.collectAsStateWithLifecycle()
+    val orientation by contentOrientation.collectAsStateWithLifecycle()
 
     RallyTheme(settings.theme) {
         when (screen) {
-            Screen.SCOREBOARD -> ScoreboardScreen(vm, settings, lastInteraction, onVolume)
+            Screen.SCOREBOARD -> ScoreboardScreen(vm, settings, lastInteraction, orientation, onVolume)
             Screen.SETTINGS -> SettingsScreen(vm, settings, onBack = { vm.closeSettings() })
         }
     }

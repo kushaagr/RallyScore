@@ -5,7 +5,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -31,7 +31,11 @@ import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.ScreenLockRotation
+import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.StayCurrentLandscape
+import androidx.compose.material.icons.filled.StayCurrentPortrait
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.Icon
@@ -50,6 +54,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
@@ -65,16 +72,24 @@ import com.rallyscore.app.model.Rules
 import com.rallyscore.app.model.Score
 import com.rallyscore.app.model.Side
 import com.rallyscore.app.settings.AppSettings
+import com.rallyscore.app.settings.OrientationMode
 import kotlinx.coroutines.delay
+import kotlin.math.cos
+import kotlin.math.sin
 
 /** Small orbit (in dp) the whole layout walks through, one step per minute, to avoid burn-in. */
 private val ShiftPattern = listOf(0 to 0, 2 to 1, 3 to -1, 1 to -3, -2 to -2, -3 to 1, -1 to 3, 2 to 3)
 
+/**
+ * @param contentOrientation physical orientation (0/90/180/270) the contents should face;
+ * only used when "rotate content" is on.
+ */
 @Composable
 fun ScoreboardScreen(
     vm: ScoreViewModel,
     settings: AppSettings,
     lastInteraction: Long,
+    contentOrientation: Int,
     onVolume: () -> Unit,
 ) {
     val palette = LocalPalette.current
@@ -111,7 +126,15 @@ fun ScoreboardScreen(
     }
     val controlsAlpha by animateFloatAsState(if (controlsActive) 1f else 0.2f, label = "controls")
 
-    val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    // Rotation: either the window rotates (classic) or the window stays portrait and contents turn.
+    val windowLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val orientation = if (settings.rotateContent) contentOrientation else 0
+    val angle = rememberContentAngle(orientation)
+    val swapAxes = orientation % 180 != 0
+    val sideBySide = !settings.rotateContent && windowLandscape
+    // Keep side A on the viewer's left/top whichever way the phone is turned.
+    val first = if (orientation == 90 || orientation == 180) Side.B else Side.A
+    val second = first.other
 
     Box(
         Modifier
@@ -125,15 +148,15 @@ fun ScoreboardScreen(
                 .padding(12.dp)
                 .offset(dx.dp, dy.dp),
         ) {
-            if (landscape) {
+            if (sideBySide) {
                 Row(
                     Modifier
                         .weight(1f)
                         .fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    SidePanel(vm, Side.A, score, rules, settings, Modifier.weight(1f).fillMaxHeight())
-                    SidePanel(vm, Side.B, score, rules, settings, Modifier.weight(1f).fillMaxHeight())
+                    SidePanel(vm, first, score, rules, settings, angle, swapAxes, orientation, Modifier.weight(1f).fillMaxHeight())
+                    SidePanel(vm, second, score, rules, settings, angle, swapAxes, orientation, Modifier.weight(1f).fillMaxHeight())
                 }
             } else {
                 Column(
@@ -142,9 +165,22 @@ fun ScoreboardScreen(
                         .fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    SidePanel(vm, Side.A, score, rules, settings, Modifier.weight(1f).fillMaxWidth())
-                    SidePanel(vm, Side.B, score, rules, settings, Modifier.weight(1f).fillMaxWidth())
+                    SidePanel(vm, first, score, rules, settings, angle, swapAxes, orientation, Modifier.weight(1f).fillMaxWidth())
+                    SidePanel(vm, second, score, rules, settings, angle, swapAxes, orientation, Modifier.weight(1f).fillMaxWidth())
                 }
+            }
+
+            val orientationIcon = when (settings.orientation) {
+                OrientationMode.AUTO -> Icons.Filled.ScreenRotation
+                OrientationMode.PORTRAIT -> Icons.Filled.StayCurrentPortrait
+                OrientationMode.LANDSCAPE -> Icons.Filled.StayCurrentLandscape
+                OrientationMode.LOCKED -> Icons.Filled.ScreenLockRotation
+            }
+            val orientationLabel = when (settings.orientation) {
+                OrientationMode.AUTO -> "Orientation: rotate with phone"
+                OrientationMode.PORTRAIT -> "Orientation: portrait"
+                OrientationMode.LANDSCAPE -> "Orientation: landscape"
+                OrientationMode.LOCKED -> "Orientation: locked"
             }
 
             Row(
@@ -152,20 +188,21 @@ fun ScoreboardScreen(
                     .fillMaxWidth()
                     .padding(top = 8.dp)
                     .alpha(controlsAlpha),
-                horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                BarButton(Icons.Filled.RestartAlt, "Reset") { vm.reset() }
-                BarButton(Icons.AutoMirrored.Filled.Undo, "Undo", enabled = canUndo) { vm.undo() }
-                BarButton(Icons.AutoMirrored.Filled.Redo, "Redo", enabled = canRedo) { vm.redo() }
-                BarButton(if (landscape) Icons.Filled.SwapHoriz else Icons.Filled.SwapVert, "Swap sides") { vm.swapSides() }
-                BarButton(Icons.AutoMirrored.Filled.VolumeUp, "Volume") { onVolume() }
-                BarButton(Icons.AutoMirrored.Filled.HelpOutline, "Help") { showHelp = true }
-                BarButton(Icons.Filled.Settings, "Settings") { vm.openSettings() }
+                val m = Modifier.weight(1f)
+                BarButton(Icons.Filled.RestartAlt, "Reset", angle, m) { vm.reset() }
+                BarButton(Icons.AutoMirrored.Filled.Undo, "Undo", angle, m, enabled = canUndo) { vm.undo() }
+                BarButton(Icons.AutoMirrored.Filled.Redo, "Redo", angle, m, enabled = canRedo) { vm.redo() }
+                BarButton(if (sideBySide) Icons.Filled.SwapHoriz else Icons.Filled.SwapVert, "Swap sides", angle, m) { vm.swapSides() }
+                BarButton(orientationIcon, orientationLabel, angle, m) { vm.cycleOrientation() }
+                BarButton(Icons.AutoMirrored.Filled.VolumeUp, "Volume", angle, m) { onVolume() }
+                BarButton(Icons.AutoMirrored.Filled.HelpOutline, "Help", angle, m) { showHelp = true }
+                BarButton(Icons.Filled.Settings, "Settings", angle, m) { vm.openSettings() }
             }
         }
 
-        if (showHelp) HelpOverlay(onDismiss = { showHelp = false })
+        if (showHelp) HelpOverlay(onDismiss = { showHelp = false }, angle = angle, swapAxes = swapAxes)
     }
 }
 
@@ -176,8 +213,12 @@ private fun SidePanel(
     score: Score,
     rules: Rules,
     settings: AppSettings,
+    angle: Float,
+    swapAxes: Boolean,
+    orientation: Int,
     modifier: Modifier,
 ) {
+    val palette = LocalPalette.current
     val player = side.player(settings.swapped)
     val winner = rules.winner(score)
     val status = when {
@@ -185,6 +226,7 @@ private fun SidePanel(
         rules.isGamePoint(score, player) -> "GAME POINT"
         else -> ""
     }
+    val tile = settings.tile(player)
     CounterPanel(
         value = score[player],
         name = settings.name(player),
@@ -192,6 +234,10 @@ private fun SidePanel(
         isServer = settings.showServe && winner == null && score.server == player,
         status = status,
         highlight = winner == player,
+        background = Color(if (palette.isDark) tile.dark else tile.light),
+        angle = angle,
+        swapAxes = swapAxes,
+        upAngle = -orientation.toFloat(),
         onIncrement = { vm.increment(side) },
         onDecrement = { vm.decrement(side) },
         modifier = modifier,
@@ -206,6 +252,10 @@ private fun CounterPanel(
     isServer: Boolean,
     status: String,
     highlight: Boolean,
+    background: Color,
+    angle: Float,
+    swapAxes: Boolean,
+    upAngle: Float,
     onIncrement: () -> Unit,
     onDecrement: () -> Unit,
     modifier: Modifier,
@@ -215,23 +265,27 @@ private fun CounterPanel(
     val threshold = with(density) { 40.dp.toPx() }
     val inc by rememberUpdatedState(onIncrement)
     val dec by rememberUpdatedState(onDecrement)
+    val up by rememberUpdatedState(upAngle)
     val shape = RoundedCornerShape(24.dp)
 
     BoxWithConstraints(
         modifier = modifier
             .clip(shape)
-            .background(palette.panel)
+            .background(background)
             .border(1.dp, palette.panelBorder, shape)
             .pointerInput(Unit) {
-                var total = 0f
-                detectVerticalDragGestures(
-                    onDragStart = { total = 0f },
+                var total = Offset.Zero
+                detectDragGestures(
+                    onDragStart = { total = Offset.Zero },
                     onDragEnd = {
-                        if (total < -threshold) inc() else if (total > threshold) dec()
-                        total = 0f
+                        // Project the drag onto the viewer's "up" direction (depends on how the phone is held).
+                        val rad = Math.toRadians(up.toDouble())
+                        val upward = total.x * sin(rad).toFloat() - total.y * cos(rad).toFloat()
+                        if (upward > threshold) inc() else if (upward < -threshold) dec()
+                        total = Offset.Zero
                     },
-                    onDragCancel = { total = 0f },
-                    onVerticalDrag = { change, dragAmount ->
+                    onDragCancel = { total = Offset.Zero },
+                    onDrag = { change, dragAmount ->
                         change.consume()
                         total += dragAmount
                     },
@@ -239,10 +293,15 @@ private fun CounterPanel(
             },
         contentAlignment = Alignment.Center,
     ) {
-        val digitSize = with(density) { minOf(maxHeight * 0.55f, maxWidth * 0.6f).toSp() }
+        val w = if (swapAxes) maxHeight else maxWidth
+        val h = if (swapAxes) maxWidth else maxHeight
+        val digitSize = with(density) { minOf(h * 0.55f, w * 0.6f).toSp() }
         val color = if (highlight) palette.win else palette.digits
 
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            modifier = Modifier.rotatedContent(angle, swapAxes),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
             Row(Modifier.height(28.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (isServer) {
                     Box(
@@ -287,16 +346,20 @@ private fun CounterPanel(
 private fun BarButton(
     icon: ImageVector,
     label: String,
+    angle: Float,
+    modifier: Modifier,
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     val palette = LocalPalette.current
-    IconButton(onClick = onClick, enabled = enabled) {
+    IconButton(onClick = onClick, enabled = enabled, modifier = modifier) {
         Icon(
             imageVector = icon,
             contentDescription = label,
             tint = if (enabled) palette.icon else palette.icon.copy(alpha = 0.3f),
-            modifier = Modifier.size(28.dp),
+            modifier = Modifier
+                .size(26.dp)
+                .rotate(angle),
         )
     }
 }

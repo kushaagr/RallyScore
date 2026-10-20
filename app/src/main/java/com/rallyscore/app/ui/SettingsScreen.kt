@@ -2,6 +2,15 @@ package com.rallyscore.app.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Restore
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import com.rallyscore.app.settings.TileColor
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -65,6 +74,8 @@ import kotlin.math.roundToInt
 fun SettingsScreen(vm: ScoreViewModel, settings: AppSettings, onBack: () -> Unit) {
     val learning by vm.learning.collectAsStateWithLifecycle()
     val testing by vm.testing.collectAsStateWithLifecycle()
+    val defaults = remember { AppSettings() }
+    val isDark = LocalPalette.current.isDark
 
     BackHandler(onBack = onBack)
     BackHandler(enabled = learning != null) { vm.cancelLearning() }
@@ -147,6 +158,22 @@ fun SettingsScreen(vm: ScoreViewModel, settings: AppSettings, onBack: () -> Unit
                         selected = settings.orientation,
                     ) { v -> vm.updateSettings { it.copy(orientation = v) } }
                 }
+                item {
+                    ChoiceGroup(
+                        title = "When the phone turns",
+                        options = listOf(
+                            true to "Turn the scores and buttons (screen stays put)",
+                            false to "Rotate the whole screen",
+                        ),
+                        selected = settings.rotateContent,
+                    ) { v -> vm.updateSettings { it.copy(rotateContent = v) } }
+                }
+                item {
+                    TilePicker("${settings.player1} tile", settings.tile1, isDark) { v -> vm.updateSettings { it.copy(tile1 = v) } }
+                }
+                item {
+                    TilePicker("${settings.player2} tile", settings.tile2, isDark) { v -> vm.updateSettings { it.copy(tile2 = v) } }
+                }
 
                 item { Header("Feedback") }
                 item {
@@ -174,12 +201,12 @@ fun SettingsScreen(vm: ScoreViewModel, settings: AppSettings, onBack: () -> Unit
                     }
                 }
                 item {
-                    SliderRow("Hold delay", "How long to hold before the score starts climbing", settings.holdDelayMs, 300..2000, 100, "ms") { v ->
+                    SliderRow("Hold delay", "How long to hold before the score starts climbing", settings.holdDelayMs, 300..2000, 100, "ms", defaults.holdDelayMs) { v ->
                         vm.updateSettings { it.copy(holdDelayMs = v) }
                     }
                 }
                 item {
-                    SliderRow("Climb speed", "Time between points while holding", settings.holdStepMs, 50..500, 25, "ms") { v ->
+                    SliderRow("Climb speed", "Time between points while holding", settings.holdStepMs, 50..500, 25, "ms", defaults.holdStepMs) { v ->
                         vm.updateSettings { it.copy(holdStepMs = v) }
                     }
                 }
@@ -188,16 +215,16 @@ fun SettingsScreen(vm: ScoreViewModel, settings: AppSettings, onBack: () -> Unit
                         "Repeat gap",
                         "Button events closer than this count as one held press. Raise it if holding the remote only adds " +
                             "single points; lower it if quick taps get merged. \"Test buttons\" shows your remote's gaps.",
-                        settings.chainGapMs, 50..400, 10, "ms",
+                        settings.chainGapMs, 50..400, 10, "ms", defaults.chainGapMs,
                     ) { v -> vm.updateSettings { it.copy(chainGapMs = v) } }
                 }
                 item {
-                    SliderRow("Double-press window", "Max time between presses to start a new game", settings.doublePressMs, 200..1000, 50, "ms") { v ->
+                    SliderRow("Double-press window", "Max time between presses to start a new game", settings.doublePressMs, 200..1000, 50, "ms", defaults.doublePressMs) { v ->
                         vm.updateSettings { it.copy(doublePressMs = v) }
                     }
                 }
                 item {
-                    SliderRow("Both-buttons window", "Presses this close together count as both buttons (undo)", settings.comboWindowMs, 100..600, 25, "ms") { v ->
+                    SliderRow("Both-buttons window", "Presses this close together count as both buttons (undo)", settings.comboWindowMs, 100..600, 25, "ms", defaults.comboWindowMs) { v ->
                         vm.updateSettings { it.copy(comboWindowMs = v) }
                     }
                 }
@@ -219,7 +246,7 @@ fun SettingsScreen(vm: ScoreViewModel, settings: AppSettings, onBack: () -> Unit
                     }
                 }
                 item {
-                    SliderRow("Dim after", "Minutes without input before dimming", settings.dimAfterMin, 1..30, 1, "min", enabled = settings.dimWhenIdle) { v ->
+                    SliderRow("Dim after", "Minutes without input before dimming", settings.dimAfterMin, 1..30, 1, "min", defaults.dimAfterMin, enabled = settings.dimWhenIdle) { v ->
                         vm.updateSettings { it.copy(dimAfterMin = v) }
                     }
                 }
@@ -393,6 +420,7 @@ private fun SliderRow(
     range: IntRange,
     step: Int,
     unit: String,
+    default: Int,
     enabled: Boolean = true,
     onChange: (Int) -> Unit,
 ) {
@@ -405,6 +433,9 @@ private fun SliderRow(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
             Text("${local.roundToInt()} $unit", style = MaterialTheme.typography.bodyMedium)
+            IconButton(onClick = { onChange(default) }, enabled = enabled && value != default) {
+                Icon(Icons.Filled.Restore, contentDescription = "Reset $title to $default $unit")
+            }
         }
         Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Slider(
@@ -415,5 +446,43 @@ private fun SliderRow(
             steps = ((range.last - range.first) / step - 1).coerceAtLeast(0),
             enabled = enabled,
         )
+    }
+}
+
+@Composable
+private fun TilePicker(title: String, selected: TileColor, isDark: Boolean, onSelect: (TileColor) -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
+        Text(title, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
+        Text(
+            if (selected == TileColor.NONE) "No background" else selected.label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            TileColor.entries.forEach { tile ->
+                val isSelected = tile == selected
+                Box(
+                    Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Color(if (isDark) tile.dark else tile.light))
+                        .border(if (isSelected) 3.dp else 1.5.dp, Color(tile.swatch), CircleShape)
+                        .selectable(selected = isSelected, role = Role.RadioButton, onClick = { onSelect(tile) }),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (isSelected) {
+                        Icon(Icons.Filled.Check, contentDescription = tile.label, tint = Color(tile.swatch), modifier = Modifier.size(18.dp))
+                    }
+                }
+            }
+        }
     }
 }

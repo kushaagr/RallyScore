@@ -27,7 +27,12 @@ import androidx.compose.ui.unit.dp
  * volume-key events the activity needs (e.g. while learning a remote button).
  */
 @Composable
-fun Overlay(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+fun Overlay(
+    onDismiss: () -> Unit,
+    angle: Float = 0f,
+    swapAxes: Boolean = false,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -45,6 +50,7 @@ fun Overlay(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) 
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             modifier = Modifier
+                .rotatedContent(angle, swapAxes)
                 .widthIn(max = 560.dp)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
