@@ -36,8 +36,8 @@ Requires Android 8.0 or newer.
 | Point to left / top player | **Volume Up** |
 | Point to right / bottom player | **Volume Down** |
 | Quickly add many points | **Hold** a button: after a moment the score climbs until the game is won |
-| Undo | Press **both buttons together** |
-| Start a new game | After a win, **double-press the winner's button** |
+| Undo | Press **both volume buttons together** |
+| Start a new game | After a win, **double-press the winner's (volume) button** |
 
 Any cheap Bluetooth "selfie" or media remote that sends volume buttons works. The phone's own volume buttons work the same way.
 
