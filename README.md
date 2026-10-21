@@ -1,5 +1,7 @@
 # 🏸 Rally Score
 
+![banner image](./assets/hero.png)
+
 > ⭐ **If you find Rally Score useful, please star this repo!** It helps other players find it and keeps the project going.
 
 A big, simple two-player scoreboard for badminton and other rally sports. Put your phone on a stand by the court and keep score with a swipe or a Bluetooth remote. Built for AMOLED screens with true blacks.
