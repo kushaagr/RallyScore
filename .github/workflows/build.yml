@@ -4,93 +4,97 @@ on:
   push:
     branches: ["**"]
     tags: ["v*"]
-    paths-ignore:
-      - 'README.md'
-      - '**.md'
-      - 'LICENSE'
-      - '.gitignore'
+    paths:
+      - 'app/**'
+      - 'keystore/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+      - '.github/workflows/**'
   pull_request:
-    paths-ignore:
-      - 'README.md'
-      - '**.md'
-      - 'LICENSE'
-      - '.gitignore'
+    paths:
+      - 'app/**'
+      - 'keystore/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+      - '.github/workflows/**'
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: build-${{ github.ref }}
-  cancel-in-progress: true
+  group: build-${{ github.ref }}[span_0](start_span)[span_0](end_span)
+  cancel-in-progress: true[span_1](start_span)[span_1](end_span)
 
 jobs:
   build:
     # Pinned so the Ubuntu 26 switch of "ubuntu-latest" can't break the build.
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04[span_2](start_span)[span_2](end_span)
     env:
       # Optional custom signing key (see README). Leave unset to use keystore/shared.keystore.
-      SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+      SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}[span_3](start_span)[span_3](end_span)
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5[span_4](start_span)[span_4](end_span)
 
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v5[span_5](start_span)[span_5](end_span)
         with:
-          distribution: temurin
-          java-version: "17"
+          distribution: temurin[span_6](start_span)[span_6](end_span)
+          java-version: "17[span_7](start_span)"[span_7](end_span)
 
       # Installs cmdline-tools and accepts the SDK licenses.
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v4
+      - name: Set up Android SDK[span_8](start_span)[span_8](end_span)
+        uses: android-actions/setup-android@v4[span_9](start_span)[span_9](end_span)
 
       # Licenses are already accepted above, so no "yes |" pipe is needed.
-      - name: Install Android SDK packages
-        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+      - name: Install Android SDK packages[span_10](start_span)[span_10](end_span)
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0[span_11](start_span)"[span_11](end_span)
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v5
+      - name: Set up Gradle[span_12](start_span)[span_12](end_span)
+        uses: gradle/actions/setup-gradle@v5[span_13](start_span)[span_13](end_span)
         with:
-          gradle-version: "8.11.1"
+          gradle-version: "8.11.1[span_14](start_span)"[span_14](end_span)
 
-      - name: Use custom signing key
-        if: env.SIGNING_KEYSTORE_BASE64 != ''
+      - name: Use custom signing key[span_15](start_span)[span_15](end_span)
+        if: env.SIGNING_KEYSTORE_BASE64 != '[span_16](start_span)'[span_16](end_span)
         run: |
           echo "$SIGNING_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
           echo "SIGNING_KEYSTORE_PATH=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
           echo "SIGNING_STORE_PASSWORD=${{ secrets.SIGNING_STORE_PASSWORD }}" >> "$GITHUB_ENV"
           echo "SIGNING_KEY_ALIAS=${{ secrets.SIGNING_KEY_ALIAS }}" >> "$GITHUB_ENV"
-          echo "SIGNING_KEY_PASSWORD=${{ secrets.SIGNING_KEY_PASSWORD }}" >> "$GITHUB_ENV"
+          echo "SIGNING_KEY_PASSWORD=${{ secrets.SIGNING_KEY_PASSWORD }}" >> "$GITHUB_ENV[span_17](start_span)"[span_17](end_span)
 
-      - name: Build release APK
-        run: gradle assembleRelease --no-daemon --stacktrace
+      - name: Build release APK[span_18](start_span)[span_18](end_span)
+        run: gradle assembleRelease --no-daemon --stacktrace[span_19](start_span)[span_19](end_span)
 
-      - name: Collect APK
+      - name: Collect APK[span_20](start_span)[span_20](end_span)
         run: |
           mkdir -p out
-          cp app/build/outputs/apk/release/app-release.apk "out/RallyScore-${{ github.run_number }}.apk"
+          cp app/build/outputs/apk/release/app-release.apk "out/RallyScore-${{ github.run_number }}.apk[span_21](start_span)"[span_21](end_span)
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v5
+      - name: Upload artifact[span_22](start_span)[span_22](end_span)
+        uses: actions/upload-artifact@v5[span_23](start_span)[span_23](end_span)
         with:
-          name: RallyScore-${{ github.run_number }}
-          path: out/*.apk
+          name: RallyScore-${{ github.run_number }}[span_24](start_span)[span_24](end_span)
+          path: out/*.apk[span_25](start_span)[span_25](end_span)
 
       # Every push to the default branch refreshes a "latest" pre-release,
       # so the newest APK can be downloaded straight from the phone.
-      - name: Publish "latest" pre-release
-        if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+      - name: Publish "latest" pre-release[span_26](start_span)[span_26](end_span)
+        if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)[span_27](start_span)[span_27](end_span)
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}[span_28](start_span)[span_28](end_span)
         run: |
           gh release delete latest --cleanup-tag --yes || true
           gh release create latest out/*.apk \
             --prerelease \
             --target "$GITHUB_SHA" \
             --title "Latest build #${{ github.run_number }}" \
-            --notes "Automatic build of ${GITHUB_SHA::7}"
+            --notes "Automatic build of ${GITHUB_SHA::7}[span_29](start_span)"[span_29](end_span)
 
-      - name: Publish tagged release
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Publish tagged release[span_30](start_span)[span_30](end_span)
+        if: startsWith(github.ref, 'refs/tags/v')[span_31](start_span)[span_31](end_span)
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" out/*.apk --title "$GITHUB_REF_NAME" --generate-notes
+          GH_TOKEN: ${{ github.token }}[span_32](start_span)[span_32](end_span)
+        run: gh release create "$GITHUB_REF_NAME" out/*.apk --title "$GITHUB_REF_NAME" --generate-notes[span_33](start_span)[span_33](end_span)
